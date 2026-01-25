@@ -1,9 +1,6 @@
 'use server'
 
-import * as XLSX from 'xlsx';
-import { writeFile, readFile, mkdir } from 'fs/promises';
-import { existsSync } from 'fs';
-import path from 'path';
+import { supabase } from '@/lib/supabase';
 
 interface AnnualReportData {
     businessName: string;
@@ -79,79 +76,34 @@ function validateFormData(data: AnnualReportData): ActionResponse {
 
 export async function submitAnnualReportForm(data: AnnualReportData): Promise<ActionResponse> {
     try {
+        console.log('📝 Starting form submission...');
+
         // Validate the form data
         const validation = validateFormData(data);
         if (!validation.success) {
             return validation;
         }
 
-        // Define the file path
-        const dataDir = path.join(process.cwd(), 'data');
-        const filePath = path.join(dataDir, 'annual-report-submissions.xlsx');
+        // Insert into Supabase
+        console.log('💾 Saving to Supabase...');
+        const { data: insertedData, error } = await supabase
+            .from('annual_reports')
+            .insert([
+                {
+                    business_name: data.businessName.trim(),
+                    address: data.address.trim(),
+                    email: data.email.trim().toLowerCase(),
+                    signature: data.signature.trim()
+                }
+            ])
+            .select();
 
-        // Ensure data directory exists
-        if (!existsSync(dataDir)) {
-            await mkdir(dataDir, { recursive: true });
+        if (error) {
+            console.error('Supabase error:', error);
+            throw new Error('Failed to save data to database');
         }
 
-        let workbook: XLSX.WorkBook;
-        let worksheet: XLSX.WorkSheet;
-        let existingData: any[] = [];
-
-        // Check if file exists and read existing data
-        if (existsSync(filePath)) {
-            const fileBuffer = await readFile(filePath);
-            workbook = XLSX.read(fileBuffer, { type: 'buffer' });
-            worksheet = workbook.Sheets[workbook.SheetNames[0]];
-            existingData = XLSX.utils.sheet_to_json(worksheet);
-        } else {
-            // Create new workbook if file doesn't exist
-            workbook = XLSX.utils.book_new();
-        }
-
-        // Prepare new row with timestamp
-        const newRow = {
-            'Submission Date': new Date().toLocaleString('en-US', {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: true
-            }),
-            'Business Name': data.businessName.trim(),
-            'Address': data.address.trim(),
-            'Email': data.email.trim().toLowerCase(),
-            'Signature': data.signature.trim()
-        };
-
-        // Add new row to existing data
-        existingData.push(newRow);
-
-        // Create new worksheet with all data
-        const newWorksheet = XLSX.utils.json_to_sheet(existingData);
-
-        // Set column widths for better readability
-        const columnWidths = [
-            { wch: 20 }, // Submission Date
-            { wch: 30 }, // Business Name
-            { wch: 40 }, // Address
-            { wch: 30 }, // Email
-            { wch: 25 }  // Signature
-        ];
-        newWorksheet['!cols'] = columnWidths;
-
-        // Replace the worksheet in workbook
-        if (workbook.SheetNames.length > 0) {
-            workbook.Sheets[workbook.SheetNames[0]] = newWorksheet;
-        } else {
-            XLSX.utils.book_append_sheet(workbook, newWorksheet, 'Submissions');
-        }
-
-        // Write the file
-        const excelBuffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-        await writeFile(filePath, excelBuffer);
+        console.log('✅ Data saved successfully!', insertedData);
 
         return {
             success: true,
@@ -159,10 +111,10 @@ export async function submitAnnualReportForm(data: AnnualReportData): Promise<Ac
         };
 
     } catch (error) {
-        console.error('Error submitting form:', error);
+        console.error('❌ Error submitting form:', error);
         return {
             success: false,
-            message: 'An error occurred while submitting your request. Please try again later.'
+            message: error instanceof Error ? error.message : 'An error occurred while submitting your request. Please try again later.'
         };
     }
 }
