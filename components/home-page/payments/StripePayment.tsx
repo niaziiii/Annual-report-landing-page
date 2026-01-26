@@ -1,49 +1,42 @@
-"use client"
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { loadStripe } from '@stripe/stripe-js';
-import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import { CreditCard, Loader2, Shield } from 'lucide-react';
+import React, { useEffect, useState } from "react";
+import { loadStripe } from "@stripe/stripe-js";
+import {
+    Elements,
+    PaymentElement,
+    useStripe,
+    useElements,
+} from "@stripe/react-stripe-js";
+import { Loader2, ShieldCheck } from "lucide-react";
 
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+const stripePromise = loadStripe(
+    process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
+);
 
-interface CheckoutFormProps {
-    clientSecret: string;
-    formData: any;
-}
-
-function CheckoutForm({ clientSecret, formData }: CheckoutFormProps) {
+function CheckoutForm() {
     const stripe = useStripe();
     const elements = useElements();
+
     const [loading, setLoading] = useState(false);
-    const [errorMessage, setErrorMessage] = useState<string>('');
+    const [error, setError] = useState("");
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-
-        if (!stripe || !elements) {
-            return;
-        }
+        if (!stripe || !elements) return;
 
         setLoading(true);
-        setErrorMessage('');
+        setError("");
 
-        try {
-            const { error } = await stripe.confirmPayment({
-                elements,
-                confirmParams: {
-                    return_url: `${window.location.origin}/success?processor=stripe`,
-                },
-            });
+        const { error } = await stripe.confirmPayment({
+            elements,
+            confirmParams: {
+                return_url: `${window.location.origin}/success?processor=stripe`,
+            },
+        });
 
-            if (error) {
-                setErrorMessage(error.message || 'Payment failed');
-            }
-        } catch (err) {
-            setErrorMessage('An unexpected error occurred');
-        } finally {
-            setLoading(false);
-        }
+        if (error) setError(error.message || "Payment failed");
+        setLoading(false);
     };
 
     return (
@@ -53,24 +46,24 @@ function CheckoutForm({ clientSecret, formData }: CheckoutFormProps) {
             <button
                 type="submit"
                 disabled={!stripe || loading}
-                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold py-4 rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                className="w-full bg-gray-900 hover:bg-gray-800 text-white font-medium py-3.5 rounded-md transition flex items-center justify-center disabled:opacity-50"
             >
                 {loading ? (
                     <>
-                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                        Processing...
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Processing…
                     </>
                 ) : (
                     <>
-                        <Shield className="w-5 h-5 mr-2" />
-                        Pay $210.00 Securely
+                        <ShieldCheck className="w-4 h-4 mr-2" />
+                        Pay $210.00
                     </>
                 )}
             </button>
 
-            {errorMessage && (
-                <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                    <p className="text-red-700 text-sm">{errorMessage}</p>
+            {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">
+                    {error}
                 </div>
             )}
         </form>
@@ -78,64 +71,44 @@ function CheckoutForm({ clientSecret, formData }: CheckoutFormProps) {
 }
 
 export default function StripePayment({ formData }: { formData: any }) {
-    const [clientSecret, setClientSecret] = useState<string>('');
+    const [clientSecret, setClientSecret] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string>('');
+    const [error, setError] = useState("");
 
     useEffect(() => {
-        createPaymentIntent();
+        fetch("/api/create-stripe-payment", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ amount: 21000, formData }),
+        })
+            .then((res) => res.json())
+            .then((data) => {
+                if (data.clientSecret) setClientSecret(data.clientSecret);
+                else setError("Unable to initialize payment");
+            })
+            .catch(() => setError("Payment server unavailable"))
+            .finally(() => setLoading(false));
     }, []);
 
-    const createPaymentIntent = async () => {
-        try {
-            const response = await fetch('/api/create-stripe-payment', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    amount: 21000, // $210.00 in cents
-                    formData: formData,
-                }),
-            });
-
-            const data = await response.json();
-
-            if (data.clientSecret) {
-                setClientSecret(data.clientSecret);
-            } else {
-                setError('Failed to initialize payment');
-            }
-        } catch (err) {
-            setError('Failed to connect to payment server');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    if (loading) {
+    if (loading)
         return (
-            <div className="flex items-center justify-center py-12">
-                <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+            <div className="flex justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-gray-600" />
             </div>
         );
-    }
 
-    if (error) {
+    if (error)
         return (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-red-700">{error}</p>
+            <div className="p-4 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">
+                {error}
             </div>
         );
-    }
 
-    if (!clientSecret) {
-        return null;
-    }
+    if (!clientSecret) return null;
 
     return (
         <Elements stripe={stripePromise} options={{ clientSecret }}>
-            <CheckoutForm clientSecret={clientSecret} formData={formData} />
+            <CheckoutForm />
         </Elements>
     );
 }

@@ -1,13 +1,10 @@
 import AnnualReportForm from "@/components/home-page/AnnualReportForm";
-import HeroSection from "@/components/home-page/HeroSection";
-// import HeroSection from "@/components/HeroSection";
-// import Image from "next/image";
+import BrandHeader from "@/components/home-page/BrandHeader";
 
 export default function Home() {
   return (
     <div className="min-h-screen">
-      {/* Hero Section */}
-      <HeroSection />
+      <BrandHeader />
 
       {/* Form Section with ID for smooth scroll */}
       <div id="annual-report-form">

@@ -1,7 +1,7 @@
-"use client"
+"use client";
 
-import React, { useState } from 'react';
-import { CreditCard, Loader2, Shield, Lock } from 'lucide-react';
+import React, { useState } from "react";
+import { CreditCard, Loader2, ShieldCheck, Lock } from "lucide-react";
 
 interface AuthorizePaymentProps {
     formData: any;
@@ -9,201 +9,232 @@ interface AuthorizePaymentProps {
 
 export default function AuthorizePayment({ formData }: AuthorizePaymentProps) {
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string>('');
+    const [error, setError] = useState("");
+
     const [cardData, setCardData] = useState({
-        cardNumber: '',
-        expiryMonth: '',
-        expiryYear: '',
-        cvv: '',
-        cardholderName: ''
+        cardholderName: "",
+        cardNumber: "",
+        expiryMonth: "",
+        expiryYear: "",
+        cvv: "",
     });
 
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    // =========================
+    // INPUT HANDLING
+    // =========================
+    const handleChange = (
+        e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    ) => {
         const { name, value } = e.target;
 
-        // Format card number with spaces
-        if (name === 'cardNumber') {
-            const formatted = value.replace(/\s/g, '').replace(/(\d{4})/g, '$1 ').trim();
-            setCardData(prev => ({ ...prev, [name]: formatted }));
-        } else {
-            setCardData(prev => ({ ...prev, [name]: value }));
+        if (name === "cardNumber") {
+            const formatted = value
+                .replace(/\D/g, "")
+                .replace(/(.{4})/g, "$1 ")
+                .trim();
+            setCardData((prev) => ({ ...prev, cardNumber: formatted }));
+            return;
         }
+
+        setCardData((prev) => ({ ...prev, [name]: value }));
     };
 
+    // =========================
+    // SUBMIT
+    // =========================
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
-        setError('');
+        setError("");
 
         try {
-            const response = await fetch('/api/process-authorize-payment', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+            const response = await fetch("/api/process-authorize-payment", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    amount: 210.00,
+                    amount: 210.0,
                     cardData: {
                         ...cardData,
-                        cardNumber: cardData.cardNumber.replace(/\s/g, '')
+                        cardNumber: cardData.cardNumber.replace(/\s/g, ""),
                     },
-                    formData: formData,
+                    formData,
                 }),
             });
 
             const data = await response.json();
 
             if (data.success) {
-                // Redirect to success page
                 window.location.href = `/success?processor=authorize&transaction=${data.transactionId}`;
             } else {
-                setError(data.message || 'Payment failed. Please check your card details.');
+                setError(data.message || "Payment was declined. Please review your details.");
             }
-        } catch (err) {
-            setError('An error occurred while processing your payment. Please try again.');
+        } catch {
+            setError("Unable to process payment at this time. Please try again.");
         } finally {
             setLoading(false);
         }
     };
 
+    // =========================
+    // UI
+    // =========================
     return (
         <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Cardholder Name */}
-            <div>
-                <label htmlFor="cardholderName" className="block text-sm font-semibold text-gray-700 mb-2">
-                    Cardholder Name *
-                </label>
+            {/* Cardholder */}
+            <Field label="Cardholder Name">
                 <input
-                    type="text"
-                    id="cardholderName"
                     name="cardholderName"
                     value={cardData.cardholderName}
-                    onChange={handleInputChange}
+                    onChange={handleChange}
                     required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
-                    placeholder="John Doe"
+                    placeholder="Name as shown on card"
+                    className="input"
                 />
-            </div>
+            </Field>
 
             {/* Card Number */}
-            <div>
-                <label htmlFor="cardNumber" className="block text-sm font-semibold text-gray-700 mb-2">
-                    Card Number *
-                </label>
-                <div className="relative">
-                    <CreditCard className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                    <input
-                        type="text"
-                        id="cardNumber"
-                        name="cardNumber"
-                        value={cardData.cardNumber}
-                        onChange={handleInputChange}
-                        required
-                        maxLength={19}
-                        className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
-                        placeholder="1234 5678 9012 3456"
-                    />
-                </div>
-            </div>
+            <Field label="Card Number" icon={<CreditCard className="w-5 h-5" />}>
+                <input
+                    name="cardNumber"
+                    value={cardData.cardNumber}
+                    onChange={handleChange}
+                    required
+                    maxLength={19}
+                    placeholder="1234 5678 9012 3456"
+                    className="input"
+                />
+            </Field>
 
-            {/* Expiry and CVV */}
+            {/* Expiry + CVV */}
             <div className="grid grid-cols-3 gap-4">
-                <div>
-                    <label htmlFor="expiryMonth" className="block text-sm font-semibold text-gray-700 mb-2">
-                        Month *
-                    </label>
+                <Field label="Expiry Month">
                     <select
-                        id="expiryMonth"
                         name="expiryMonth"
                         value={cardData.expiryMonth}
-                        onChange={handleInputChange}
+                        onChange={handleChange}
                         required
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
+                        className="input pl-3"
                     >
                         <option value="">MM</option>
-                        {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
-                            <option key={month} value={month.toString().padStart(2, '0')}>
-                                {month.toString().padStart(2, '0')}
-                            </option>
-                        ))}
+                        {Array.from({ length: 12 }).map((_, i) => {
+                            const m = String(i + 1).padStart(2, "0");
+                            return (
+                                <option key={m} value={m}>
+                                    {m}
+                                </option>
+                            );
+                        })}
                     </select>
-                </div>
+                </Field>
 
-                <div>
-                    <label htmlFor="expiryYear" className="block text-sm font-semibold text-gray-700 mb-2">
-                        Year *
-                    </label>
+                <Field label="Expiry Year">
                     <select
-                        id="expiryYear"
                         name="expiryYear"
                         value={cardData.expiryYear}
-                        onChange={handleInputChange}
+                        onChange={handleChange}
                         required
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
+                        className="input pl-3"
                     >
                         <option value="">YY</option>
-                        {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() + i).map(year => (
-                            <option key={year} value={year.toString().slice(-2)}>
-                                {year}
-                            </option>
-                        ))}
+                        {Array.from({ length: 10 }).map((_, i) => {
+                            const year = new Date().getFullYear() + i;
+                            return (
+                                <option key={year} value={String(year).slice(-2)}>
+                                    {year}
+                                </option>
+                            );
+                        })}
                     </select>
-                </div>
+                </Field>
 
-                <div>
-                    <label htmlFor="cvv" className="block text-sm font-semibold text-gray-700 mb-2">
-                        CVV *
-                    </label>
-                    <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <input
-                            type="text"
-                            id="cvv"
-                            name="cvv"
-                            value={cardData.cvv}
-                            onChange={handleInputChange}
-                            required
-                            maxLength={4}
-                            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
-                            placeholder="123"
-                        />
-                    </div>
-                </div>
+                <Field label="CVV" icon={<Lock className="w-4 h-4" />}>
+                    <input
+                        name="cvv"
+                        value={cardData.cvv}
+                        onChange={handleChange}
+                        required
+                        maxLength={4}
+                        placeholder="123"
+                        className="input pl-10"
+                    />
+                </Field>
             </div>
 
-            {/* Error Message */}
+            {/* Error */}
             {error && (
-                <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                    <p className="text-red-700 text-sm">{error}</p>
+                <div className="p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">
+                    {error}
                 </div>
             )}
 
-            {/* Submit Button */}
+            {/* Submit */}
             <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold py-4 rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                className="w-full bg-gray-900 hover:bg-gray-800 text-white font-medium py-3.5 rounded-md transition flex items-center justify-center disabled:opacity-50"
             >
                 {loading ? (
                     <>
-                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                        Processing Payment...
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Processing…
                     </>
                 ) : (
                     <>
-                        <Shield className="w-5 h-5 mr-2" />
-                        Pay $210.00 Securely
+                        <ShieldCheck className="w-4 h-4 mr-2" />
+                        Pay $210.00
                     </>
                 )}
             </button>
 
-            {/* Security Badge */}
-            <div className="text-center">
-                <p className="text-xs text-gray-500 flex items-center justify-center">
-                    <Lock className="w-3 h-3 mr-1" />
-                    Secured by Authorize.Net - PCI DSS Compliant
-                </p>
-            </div>
+            {/* Security */}
+            <p className="text-xs text-gray-500 flex items-center justify-center gap-1">
+                <Lock className="w-3.5 h-3.5" />
+                Authorize.Net · PCI-DSS Compliant · Encrypted
+            </p>
+
+            {/* Shared input styles */}
+            <style jsx>{`
+        .input {
+          width: 100%;
+          padding: 0.75rem 1rem;
+          border: 1px solid #d1d5db;
+          border-radius: 0.375rem;
+          outline: none;
+        }
+        .input:focus {
+          border-color: #111827;
+          box-shadow: 0 0 0 1px #111827;
+        }
+      `}</style>
         </form>
+    );
+}
+
+// =========================
+// FIELD
+// =========================
+function Field({
+    label,
+    icon,
+    children,
+}: {
+    label: string;
+    icon?: React.ReactNode;
+    children: React.ReactNode;
+}) {
+    return (
+        <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+                {label}
+            </label>
+            <div className="relative">
+                {icon && (
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                        {icon}
+                    </div>
+                )}
+                {children}
+            </div>
+        </div>
     );
 }
