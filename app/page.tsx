@@ -1,5 +1,5 @@
-import AnnualReportForm from "@/components/AnnualReportForm";
-import HeroSection from "@/components/HeroSection";
+import AnnualReportForm from "@/components/home-page/AnnualReportForm";
+import HeroSection from "@/components/home-page/HeroSection";
 // import HeroSection from "@/components/HeroSection";
 // import Image from "next/image";
 

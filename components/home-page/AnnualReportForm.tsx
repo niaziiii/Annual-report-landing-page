@@ -1,32 +1,37 @@
 "use client"
 
 import React, { useState } from 'react';
-import { Mail, Building2, MapPin, FileText, CheckCircle, AlertCircle } from 'lucide-react';
-import { submitAnnualReportForm } from '@/app/actions/annualReportActions';
+import { Mail, Building2, MapPin, FileText, CheckCircle, AlertCircle, CreditCard } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 interface FormErrors {
     businessName?: string;
     address?: string;
     email?: string;
     signature?: string;
+    paymentProcessor?: string;
 }
 
+type PaymentProcessor = 'stripe' | 'authorize';
+
 export default function AnnualReportForm() {
+    const router = useRouter();
     const [formData, setFormData] = useState({
         businessName: '',
         address: '',
         email: '',
-        signature: ''
+        signature: '',
+        paymentProcessor: '' as PaymentProcessor | ''
     });
     const [errors, setErrors] = useState<FormErrors>({});
-    const [isSubmitted, setIsSubmitted] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [serverError, setServerError] = useState<string>('');
     const [touched, setTouched] = useState({
         businessName: false,
         address: false,
         email: false,
-        signature: false
+        signature: false,
+        paymentProcessor: false
     });
 
     const validateField = (name: string, value: string): string => {
@@ -54,6 +59,10 @@ export default function AnnualReportForm() {
                 if (value.trim().length < 2) return 'Please enter your full name (minimum 2 characters)';
                 if (value.trim().length > 100) return 'Signature must not exceed 100 characters';
                 break;
+
+            case 'paymentProcessor':
+                if (!value) return 'Please select a payment method';
+                break;
         }
         return '';
     };
@@ -62,14 +71,20 @@ export default function AnnualReportForm() {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
 
-        // Clear server error when user starts typing
         setServerError('');
 
-        // Validate field if it has been touched
         if (touched[name as keyof typeof touched]) {
             const error = validateField(name, value);
             setErrors(prev => ({ ...prev, [name]: error }));
         }
+    };
+
+    const handleProcessorChange = (processor: PaymentProcessor) => {
+        setFormData(prev => ({ ...prev, paymentProcessor: processor }));
+        setTouched(prev => ({ ...prev, paymentProcessor: true }));
+
+        const error = validateField('paymentProcessor', processor);
+        setErrors(prev => ({ ...prev, paymentProcessor: error }));
     };
 
     const handleBlur = (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -94,73 +109,31 @@ export default function AnnualReportForm() {
 
         setErrors(newErrors);
 
-        // Mark all fields as touched
         setTouched({
             businessName: true,
             address: true,
             email: true,
-            signature: true
+            signature: true,
+            paymentProcessor: true
         });
 
         return isValid;
     };
 
-    const handleSubmit = async () => {
-        // Validate all fields before submission
+    const handleProceedToPayment = () => {
         if (!validateAllFields()) {
-            setServerError('Please fix all validation errors before submitting');
+            setServerError('Please fix all validation errors before proceeding to payment');
             return;
         }
 
         setIsSubmitting(true);
-        setServerError('');
 
-        try {
-            const result = await submitAnnualReportForm(formData);
-            console.log({ result })
-            if (result.success) {
-                setIsSubmitted(true);
-            } else {
-                if (result.errors) {
-                    setErrors(result.errors);
-                }
-                setServerError(result.message);
-            }
-        } catch (error) {
-            setServerError('An unexpected error occurred. Please try again later.');
-            console.error('Submission error:', error);
-        } finally {
-            setIsSubmitting(false);
-        }
+        // Store form data in sessionStorage for payment page
+        sessionStorage.setItem('annualReportFormData', JSON.stringify(formData));
+
+        // Navigate to payment page with processor info
+        router.push(`/payment?processor=${formData.paymentProcessor}`);
     };
-
-    if (isSubmitted) {
-        return (
-            <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
-                <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
-                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <CheckCircle className="w-10 h-10 text-green-600" />
-                    </div>
-                    <h2 className="text-2xl font-bold text-gray-800 mb-2">Thank You!</h2>
-                    <p className="text-gray-600 mb-6">
-                        Your information has been successfully submitted. We'll send the annual report to your email shortly.
-                    </p>
-                    <button
-                        onClick={() => {
-                            setIsSubmitted(false);
-                            setFormData({ businessName: '', address: '', email: '', signature: '' });
-                            setErrors({});
-                            setTouched({ businessName: false, address: false, email: false, signature: false });
-                            setServerError('');
-                        }}
-                        className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                        Submit Another
-                    </button>
-                </div>
-            </div>
-        );
-    }
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-12 px-4">
@@ -181,6 +154,15 @@ export default function AnnualReportForm() {
                 {/* Form Section */}
                 <div className="bg-white rounded-2xl shadow-xl p-8 md:p-12">
                     <h2 className="text-2xl font-bold text-gray-800 mb-6">Request Your Annual Report</h2>
+
+                    {/* Price Badge */}
+                    <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
+                        <div>
+                            <p className="text-sm text-blue-600 font-semibold">Annual Report Price</p>
+                            <p className="text-2xl font-bold text-blue-900">$210.00</p>
+                        </div>
+                        <CreditCard className="w-8 h-8 text-blue-600" />
+                    </div>
 
                     {/* Server Error Alert */}
                     {serverError && (
@@ -269,10 +251,71 @@ export default function AnnualReportForm() {
                             )}
                         </div>
 
+                        {/* Payment Processor Selection */}
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-3">
+                                Select Payment Method *
+                            </label>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {/* Stripe Option */}
+                                <button
+                                    type="button"
+                                    onClick={() => handleProcessorChange('stripe')}
+                                    className={`p-4 border-2 rounded-lg transition-all ${formData.paymentProcessor === 'stripe'
+                                        ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-200'
+                                        : 'border-gray-300 hover:border-blue-300'
+                                        }`}
+                                >
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center space-x-3">
+                                            <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
+                                                <CreditCard className="w-6 h-6 text-indigo-600" />
+                                            </div>
+                                            <div className="text-left">
+                                                <p className="font-semibold text-gray-900">Stripe</p>
+                                                <p className="text-xs text-gray-500">Credit/Debit Card</p>
+                                            </div>
+                                        </div>
+                                        {formData.paymentProcessor === 'stripe' && (
+                                            <CheckCircle className="w-5 h-5 text-blue-600" />
+                                        )}
+                                    </div>
+                                </button>
+
+                                {/* Authorize.Net Option */}
+                                <button
+                                    type="button"
+                                    onClick={() => handleProcessorChange('authorize')}
+                                    className={`p-4 border-2 rounded-lg transition-all ${formData.paymentProcessor === 'authorize'
+                                        ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-200'
+                                        : 'border-gray-300 hover:border-blue-300'
+                                        }`}
+                                >
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center space-x-3">
+                                            <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                                                <CreditCard className="w-6 h-6 text-green-600" />
+                                            </div>
+                                            <div className="text-left">
+                                                <p className="font-semibold text-gray-900">Authorize.Net</p>
+                                                <p className="text-xs text-gray-500">Secure Payment</p>
+                                            </div>
+                                        </div>
+                                        {formData.paymentProcessor === 'authorize' && (
+                                            <CheckCircle className="w-5 h-5 text-blue-600" />
+                                        )}
+                                    </div>
+                                </button>
+                            </div>
+                            {errors.paymentProcessor && touched.paymentProcessor && (
+                                <p className="mt-2 text-sm text-red-600">{errors.paymentProcessor}</p>
+                            )}
+                        </div>
+
                         {/* Signature */}
                         <div>
                             <label htmlFor="signature" className="block text-sm font-semibold text-gray-700 mb-2">
-                                Signature (Type your full name) *
+                                Electronic Signature (Type your full name) *
                             </label>
                             <input
                                 type="text"
@@ -292,24 +335,24 @@ export default function AnnualReportForm() {
                                 <p className="mt-1 text-sm text-red-600">{errors.signature}</p>
                             )}
                             <p className="mt-1 text-sm text-gray-500">
-                                By typing your name, you agree to receive the annual report
+                                By typing your name, you agree to purchase the annual report for $210.00
                             </p>
                         </div>
 
-                        {/* Submit Button */}
+                        {/* Proceed to Payment Button */}
                         <button
-                            onClick={handleSubmit}
+                            onClick={handleProceedToPayment}
                             disabled={isSubmitting}
                             className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold py-4 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            {isSubmitting ? 'Submitting...' : 'Get Annual Report'}
+                            {isSubmitting ? 'Processing...' : 'Proceed to Payment ($210.00)'}
                         </button>
                     </div>
                 </div>
 
                 {/* Footer Note */}
                 <p className="text-center text-sm text-gray-500 mt-8">
-                    Your information is secure and will only be used to deliver the annual report.
+                    🔒 Your information is secure and encrypted. You will be redirected to a secure payment page.
                 </p>
             </div>
         </div>

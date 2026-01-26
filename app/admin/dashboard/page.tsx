@@ -1,4 +1,3 @@
-
 "use client"
 
 import React, { useState, useEffect } from 'react';
@@ -243,7 +242,10 @@ export default function AdminDashboard() {
                                         Email
                                     </th>
                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                                        Address
+                                        Payment
+                                    </th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                        Status
                                     </th>
                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                                         Signature
@@ -253,7 +255,7 @@ export default function AdminDashboard() {
                             <tbody className="divide-y divide-gray-200">
                                 {filteredReports.length === 0 ? (
                                     <tr>
-                                        <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                                        <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
                                             {searchQuery ? 'No reports found matching your search.' : 'No submissions yet.'}
                                         </td>
                                     </tr>
@@ -279,10 +281,32 @@ export default function AdminDashboard() {
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
-                                                <div className="flex items-start text-sm text-gray-600 max-w-xs">
-                                                    <MapPin className="w-4 h-4 text-gray-400 mr-2 flex-shrink-0 mt-0.5" />
-                                                    <span className="line-clamp-2">{report.address}</span>
+                                                <div className="text-sm">
+                                                    <div className="flex items-center space-x-2 mb-1">
+                                                        <span className={`px-2 py-1 rounded text-xs font-medium ${report.payment_processor === 'stripe'
+                                                            ? 'bg-indigo-100 text-indigo-700'
+                                                            : 'bg-green-100 text-green-700'
+                                                            }`}>
+                                                            {report.payment_processor === 'stripe' ? 'Stripe' : 'Authorize.Net'}
+                                                        </span>
+                                                        <span className="text-gray-900 font-semibold">${report.amount || '210.00'}</span>
+                                                    </div>
+                                                    {report.transaction_id && (
+                                                        <p className="text-xs text-gray-500 font-mono truncate max-w-[150px]" title={report.transaction_id}>
+                                                            {report.transaction_id}
+                                                        </p>
+                                                    )}
                                                 </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className={`px-3 py-1 rounded-full text-xs font-medium ${report.payment_status === 'completed'
+                                                    ? 'bg-green-100 text-green-700'
+                                                    : report.payment_status === 'pending'
+                                                        ? 'bg-yellow-100 text-yellow-700'
+                                                        : 'bg-red-100 text-red-700'
+                                                    }`}>
+                                                    {report.payment_status || 'completed'}
+                                                </span>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center text-sm text-gray-900">

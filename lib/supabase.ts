@@ -13,5 +13,9 @@ export interface AnnualReport {
     address: string;
     email: string;
     signature: string;
+    payment_processor: string;
     created_at: string;
+    transaction_id: string;
+    payment_status: string;
+    amount: any
 }
