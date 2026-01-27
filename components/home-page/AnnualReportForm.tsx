@@ -250,7 +250,7 @@ export default function AnnualReportForm() {
                                 value={formData.businessName}
                                 onChange={handleChange}
                                 onBlur={handleBlur}
-                                className="input"
+                                className="input text-black"
                                 placeholder="Legal business name as registered"
                             />
                         </Field>
@@ -269,7 +269,7 @@ export default function AnnualReportForm() {
                                 value={formData.address}
                                 onChange={handleChange}
                                 onBlur={handleBlur}
-                                className="input resize-none"
+                                className="input resize-none text-black"
                                 placeholder="Street address, city, state, postal code, country"
                             />
                         </Field>
@@ -287,7 +287,7 @@ export default function AnnualReportForm() {
                                 value={formData.email}
                                 onChange={handleChange}
                                 onBlur={handleBlur}
-                                className="input"
+                                className="input text-black"
                                 placeholder="business@email.com"
                             />
                         </Field>
@@ -370,7 +370,7 @@ export default function AnnualReportForm() {
                                     value={formData.signature}
                                     onChange={handleChange}
                                     onBlur={handleBlur}
-                                    className="input font-serif italic"
+                                    className="input font-serif italic text-black"
                                     placeholder="Full legal name (e.g. John A. Smith)"
                                 />
                             </Field>
@@ -405,6 +405,7 @@ export default function AnnualReportForm() {
           border: 1px solid #d1d5db;
           border-radius: 0.375rem;
           outline: none;
+          color:black !important;
         }
         .input:focus {
           border-color: #111827;
