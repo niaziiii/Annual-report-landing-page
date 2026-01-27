@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
     Mail,
     Building2,
@@ -9,8 +9,10 @@ import {
     CreditCard,
     CheckCircle,
     PenLine,
+    Loader2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useAppSettings } from "@/store/useAppSettings";
 
 interface FormErrors {
     businessName?: string;
@@ -24,6 +26,11 @@ type PaymentProcessor = "stripe" | "authorize";
 
 export default function AnnualReportForm() {
     const router = useRouter();
+    const { settings, loading } = useAppSettings();
+
+    // ✅ derive directly from zustand
+    const price = settings?.report_price ?? 210;
+    const activePayment = settings?.active_payment_method ?? "stripe";
 
     const [formData, setFormData] = useState({
         businessName: "",
@@ -45,6 +52,38 @@ export default function AnnualReportForm() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [serverError, setServerError] = useState("");
 
+    // ✅ payment selection rules derived from settings (single source of truth)
+    const shouldShowPaymentSelection = activePayment === "both";
+
+    const availablePaymentMethods: PaymentProcessor[] = useMemo(() => {
+        if (activePayment === "both") return ["stripe", "authorize"];
+        return [activePayment as PaymentProcessor];
+    }, [activePayment]);
+
+    // ✅ auto-select payment method when settings load OR when admin changes it
+    useEffect(() => {
+        if (!settings) return;
+
+        if (settings.active_payment_method !== "both") {
+            const method = settings.active_payment_method as PaymentProcessor;
+            setFormData((prev) => ({
+                ...prev,
+                paymentProcessor: method,
+            }));
+
+            // clear any old error/touched for payment
+            setErrors((prev) => ({ ...prev, paymentProcessor: "" }));
+            setTouched((prev) => ({ ...prev, paymentProcessor: false }));
+        } else {
+            // if "both" and user previously selected, keep it
+            // if empty, don't force select (so user explicitly picks)
+            setFormData((prev) => ({
+                ...prev,
+                paymentProcessor: prev.paymentProcessor || "",
+            }));
+        }
+    }, [settings]);
+
     // =========================
     // VALIDATION
     // =========================
@@ -52,27 +91,27 @@ export default function AnnualReportForm() {
         switch (name) {
             case "businessName":
                 if (!value.trim()) return "Business name is required";
-                if (value.length < 2) return "Business name must be at least 2 characters";
+                if (value.trim().length < 2) return "Business name must be at least 2 characters";
                 break;
 
             case "address":
                 if (!value.trim()) return "Business address is required";
-                if (value.length < 10) return "Please provide a complete address";
+                if (value.trim().length < 10) return "Please provide a complete address";
                 break;
 
             case "email":
                 if (!value.trim()) return "Email address is required";
-                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value))
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()))
                     return "Please enter a valid email address";
                 break;
 
             case "signature":
                 if (!value.trim()) return "Signature is required";
-                if (value.length < 2) return "Please enter your full legal name";
+                if (value.trim().length < 2) return "Please enter your full legal name";
                 break;
 
             case "paymentProcessor":
-                if (!value) return "Please select a payment method";
+                if (shouldShowPaymentSelection && !value) return "Please select a payment method";
                 break;
         }
         return "";
@@ -82,11 +121,15 @@ export default function AnnualReportForm() {
         const newErrors: FormErrors = {};
         let valid = true;
 
-        Object.keys(formData).forEach((key) => {
-            const error = validateField(
-                key,
-                formData[key as keyof typeof formData] as string
-            );
+        const keys = Object.keys(formData) as Array<keyof typeof formData>;
+
+        keys.forEach((key) => {
+            // Skip payment processor validation if it's auto-selected (single payment method)
+            if (key === "paymentProcessor" && !shouldShowPaymentSelection) {
+                return;
+            }
+
+            const error = validateField(key, String(formData[key] ?? ""));
             if (error) {
                 newErrors[key as keyof FormErrors] = error;
                 valid = false;
@@ -108,9 +151,7 @@ export default function AnnualReportForm() {
     // =========================
     // HANDLERS
     // =========================
-    const handleChange = (
-        e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-    ) => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
 
         setFormData((prev) => ({ ...prev, [name]: value }));
@@ -124,9 +165,7 @@ export default function AnnualReportForm() {
         }
     };
 
-    const handleBlur = (
-        e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>
-    ) => {
+    const handleBlur = (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
         setTouched((prev) => ({ ...prev, [name]: true }));
         setErrors((prev) => ({ ...prev, [name]: validateField(name, value) }));
@@ -148,14 +187,28 @@ export default function AnnualReportForm() {
         }
 
         setIsSubmitting(true);
-        sessionStorage.setItem(
-            "annualReportFormData",
-            JSON.stringify(formData)
-        );
 
+        sessionStorage.setItem("annualReportFormData", JSON.stringify({ ...formData, amount: price }));
+
+        // ✅ If payment method is auto-selected, this will already be set.
         router.push(`/payment?processor=${formData.paymentProcessor}`);
     };
 
+    // =========================
+    // LOADING UI
+    // =========================
+    if (loading) {
+        return (
+            <div className="bg-slate-50 py-20 px-4">
+                <div className="max-w-4xl mx-auto flex justify-center">
+                    <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+                </div>
+            </div>
+        );
+    }
+
+    // If settings failed to load (rare), still render with fallbacks
+    // (price fallback already handled)
     // =========================
     // UI
     // =========================
@@ -164,12 +217,11 @@ export default function AnnualReportForm() {
             <div className="max-w-4xl mx-auto">
                 {/* Page Header */}
                 <h1 className="text-3xl md:text-4xl font-semibold text-gray-900">
-                    Official Annual Business Report
+                    Annual Business Report
                 </h1>
 
                 <p className="mt-3 text-base text-gray-600 max-w-3xl">
-                    Complete the form below to securely generate and purchase your
-                    legally formatted annual business report.
+                    Complete the form below to securely generate and purchase your legally formatted annual business report.
                 </p>
 
                 {/* Form Card */}
@@ -179,8 +231,8 @@ export default function AnnualReportForm() {
                     </h2>
 
                     {serverError && (
-                        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md flex gap-3">
-                            <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
+                        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md items-center flex gap-3">
+                            <AlertCircle className="w-5 h-5 text-red-600" />
                             <p className="text-sm text-red-700">{serverError}</p>
                         </div>
                     )}
@@ -209,8 +261,7 @@ export default function AnnualReportForm() {
                             icon={<MapPin className="w-5 h-5 text-gray-400" />}
                             error={errors.address}
                             touched={touched.address}
-                            aligment="start"
-
+                            alignment="start"
                         >
                             <textarea
                                 name="address"
@@ -229,7 +280,6 @@ export default function AnnualReportForm() {
                             icon={<Mail className="w-5 h-5 text-gray-400" />}
                             error={errors.email}
                             touched={touched.email}
-
                         >
                             <input
                                 type="email"
@@ -239,20 +289,18 @@ export default function AnnualReportForm() {
                                 onBlur={handleBlur}
                                 className="input"
                                 placeholder="business@email.com"
-
-
                             />
                         </Field>
 
-                        {/* Payment Method */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-3">
-                                Payment Method
-                            </label>
+                        {/* Payment Method - Only show if "both" */}
+                        {shouldShowPaymentSelection && (
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-3">
+                                    Payment Method
+                                </label>
 
-                            <div className="grid md:grid-cols-2 gap-4">
-                                {(["stripe", "authorize"] as PaymentProcessor[]).map(
-                                    (method) => (
+                                <div className="grid md:grid-cols-2 gap-4">
+                                    {availablePaymentMethods.map((method) => (
                                         <button
                                             key={method}
                                             type="button"
@@ -269,34 +317,48 @@ export default function AnnualReportForm() {
                                                     </div>
                                                     <div>
                                                         <p className="font-medium text-gray-900 capitalize">
-                                                            {method === "stripe"
-                                                                ? "Stripe"
-                                                                : "Authorize.Net"}
+                                                            {method === "stripe" ? "Stripe" : "Authorize.Net"}
                                                         </p>
-                                                        <p className="text-xs text-gray-500">
-                                                            Secure card payment
-                                                        </p>
+                                                        <p className="text-xs text-gray-500">Secure card payment</p>
                                                     </div>
                                                 </div>
+
                                                 {formData.paymentProcessor === method && (
                                                     <CheckCircle className="w-5 h-5 text-gray-900" />
                                                 )}
                                             </div>
                                         </button>
-                                    )
+                                    ))}
+                                </div>
+
+                                {errors.paymentProcessor && touched.paymentProcessor && (
+                                    <p className="mt-2 text-sm text-red-600">
+                                        {errors.paymentProcessor}
+                                    </p>
                                 )}
                             </div>
+                        )}
 
-                            {errors.paymentProcessor && touched.paymentProcessor && (
-                                <p className="mt-2 text-sm text-red-600">
-                                    {errors.paymentProcessor}
-                                </p>
-                            )}
-                        </div>
+                        {/* Payment Method (Read-only) - if only one method active */}
+                        {!shouldShowPaymentSelection && (
+                            <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
+                                <div className="flex items-center gap-3">
+                                    <CreditCard className="w-5 h-5 text-gray-600" />
+                                    <div>
+                                        <p className="text-sm font-medium text-gray-900">
+                                            Payment Method:{" "}
+                                            {formData.paymentProcessor === "stripe" ? "Stripe" : "Authorize.Net"}
+                                        </p>
+                                        <p className="text-xs text-gray-500">
+                                            Secure card payment processing
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Signature */}
                         <div>
-
                             <Field
                                 label="Electronic Signature (Full Legal Name)"
                                 icon={<PenLine className="w-5 h-5 text-gray-400" />}
@@ -314,9 +376,7 @@ export default function AnnualReportForm() {
                             </Field>
 
                             <p className="mt-2 text-xs text-gray-500 leading-relaxed">
-                                By typing your full legal name, you certify that the
-                                information provided is accurate and authorize the
-                                preparation of your official annual business report.
+                                This service is provided by a third-party company and is not endorsed by, or affiliated with, any government agency.
                             </p>
                         </div>
 
@@ -324,11 +384,9 @@ export default function AnnualReportForm() {
                         <button
                             onClick={handleProceedToPayment}
                             disabled={isSubmitting}
-                            className="w-full bg-gray-900 hover:bg-gray-800 text-white font-medium py-3.5 rounded-md transition disabled:opacity-50"
+                            className="w-full cursor-pointer bg-gray-900 hover:bg-gray-800 text-white font-medium py-3.5 rounded-md transition disabled:opacity-50"
                         >
-                            {isSubmitting
-                                ? "Processing..."
-                                : "Proceed to Payment ($210.00)"}
+                            {isSubmitting ? "Processing..." : `Proceed to Payment ($${price.toFixed(2)})`}
                         </button>
                     </div>
                 </div>
@@ -366,24 +424,28 @@ function Field({
     error,
     touched,
     children,
-    aligment,
+    alignment,
 }: any) {
     return (
         <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
                 {label}
             </label>
+
             <div className="relative">
-                <div className={`absolute left-3 ${aligment === "start" ? "top-4  -translate-y-1" : "top-1/2 -translate-y-1/2"}`}>
+                <div
+                    className={`absolute left-3 ${alignment === "start"
+                        ? "top-4 -translate-y-1"
+                        : "top-1/2 -translate-y-1/2"
+                        }`}
+                >
                     {icon}
                 </div>
+
                 {children}
             </div>
-            {
-                error && touched && (
-                    <p className="mt-1 text-sm text-red-600">{error}</p>
-                )
-            }
-        </div >
+
+            {error && touched && <p className="mt-1 text-sm text-red-600">{error}</p>}
+        </div>
     );
 }

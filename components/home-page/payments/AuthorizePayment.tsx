@@ -5,9 +5,10 @@ import { CreditCard, Loader2, ShieldCheck, Lock } from "lucide-react";
 
 interface AuthorizePaymentProps {
     formData: any;
+    amount: any
 }
 
-export default function AuthorizePayment({ formData }: AuthorizePaymentProps) {
+export default function AuthorizePayment({ formData, amount }: AuthorizePaymentProps) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
 
@@ -52,7 +53,7 @@ export default function AuthorizePayment({ formData }: AuthorizePaymentProps) {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    amount: 210.0,
+                    amount: amount,
                     cardData: {
                         ...cardData,
                         cardNumber: cardData.cardNumber.replace(/\s/g, ""),
@@ -181,7 +182,7 @@ export default function AuthorizePayment({ formData }: AuthorizePaymentProps) {
                 ) : (
                     <>
                         <ShieldCheck className="w-4 h-4 mr-2" />
-                        Pay $210.00
+                        Pay ${amount}
                     </>
                 )}
             </button>

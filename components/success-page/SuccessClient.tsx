@@ -37,6 +37,7 @@ export default function SuccessClient() {
 
     const saveToDatabase = async (data: any, proc: string, txn: string) => {
         try {
+            console.log({ data })
             const res = await fetch("/api/save-annual-report", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -45,7 +46,7 @@ export default function SuccessClient() {
                     paymentProcessor: proc,
                     transactionId: txn,
                     paymentStatus: "completed",
-                    amount: 210.0,
+                    // amount: 210.0,
                 }),
             });
 
@@ -99,7 +100,7 @@ export default function SuccessClient() {
                                     mono
                                 />
                             )}
-                            <Row label="Amount Paid" value="$210.00" bold />
+                            <Row label="Amount Paid" value={`$${formData?.amount}`} bold />
                         </div>
                     </div>
 

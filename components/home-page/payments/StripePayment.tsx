@@ -14,7 +14,7 @@ const stripePromise = loadStripe(
     process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
 );
 
-function CheckoutForm() {
+function CheckoutForm({ amount }: { amount: any }) {
     const stripe = useStripe();
     const elements = useElements();
 
@@ -56,7 +56,7 @@ function CheckoutForm() {
                 ) : (
                     <>
                         <ShieldCheck className="w-4 h-4 mr-2" />
-                        Pay $210.00
+                        Pay ${amount}
                     </>
                 )}
             </button>
@@ -70,7 +70,7 @@ function CheckoutForm() {
     );
 }
 
-export default function StripePayment({ formData }: { formData: any }) {
+export default function StripePayment({ formData, amount }: { formData: any, amount: any }) {
     const [clientSecret, setClientSecret] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -79,7 +79,7 @@ export default function StripePayment({ formData }: { formData: any }) {
         fetch("/api/create-stripe-payment", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ amount: 21000, formData }),
+            body: JSON.stringify({ amount: amount * 100, formData }),
         })
             .then((res) => res.json())
             .then((data) => {
@@ -108,7 +108,7 @@ export default function StripePayment({ formData }: { formData: any }) {
 
     return (
         <Elements stripe={stripePromise} options={{ clientSecret }}>
-            <CheckoutForm />
+            <CheckoutForm amount={amount} />
         </Elements>
     );
 }

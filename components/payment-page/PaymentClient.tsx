@@ -2,17 +2,22 @@
 
 import React, { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { ArrowLeft, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ShieldCheck, Loader2 } from "lucide-react";
 import StripePayment from "@/components/home-page/payments/StripePayment";
 import AuthorizePayment from "@/components/home-page/payments/AuthorizePayment";
+import { useAppSettings } from "@/store/useAppSettings";
 
 export default function PaymentClient() {
     const searchParams = useSearchParams();
     const router = useRouter();
+    const { settings, loading } = useAppSettings();
 
     const [formData, setFormData] = useState<any>(null);
     const [processor, setProcessor] = useState<string>("");
 
+    // =========================
+    // LOAD DATA
+    // =========================
     useEffect(() => {
         const processorParam = searchParams.get("processor");
         setProcessor(processorParam || "");
@@ -25,21 +30,29 @@ export default function PaymentClient() {
         }
     }, [searchParams, router]);
 
-    if (!formData || !processor) {
+    if (loading || !settings || !formData || !processor) {
         return (
             <div className="min-h-screen flex items-center justify-center text-sm text-gray-600">
+                <Loader2 className="w-6 h-6 animate-spin mr-2" />
                 Loading payment details…
             </div>
         );
     }
 
+    // ✅ SINGLE SOURCE OF TRUTH
+    const price = settings.report_price;
+    const total = price; // future-proof if you add tax/fees later
+
+    // =========================
+    // UI
+    // =========================
     return (
         <div className="min-h-screen bg-slate-50 py-10 px-4">
             <div className="max-w-3xl mx-auto">
                 {/* Back */}
                 <button
                     onClick={() => router.back()}
-                    className="flex items-center text-sm text-gray-600 hover:text-gray-900 mb-6"
+                    className="flex items-center text-sm text-gray-600 hover:text-gray-900 mb-6 cursor-pointer"
                 >
                     <ArrowLeft className="w-4 h-4 mr-2" />
                     Back to Business Information
@@ -53,7 +66,8 @@ export default function PaymentClient() {
                             Secure Payment
                         </h1>
                         <p className="text-sm text-gray-600 mt-1">
-                            Invoice for <span className="font-medium">{formData.businessName}</span>
+                            Invoice for{" "}
+                            <span className="font-medium">{formData.businessName}</span>
                         </p>
                     </div>
 
@@ -61,20 +75,24 @@ export default function PaymentClient() {
                     <div className="p-6 bg-gray-50 border-b border-gray-200">
                         <table className="w-full text-sm">
                             <tbody>
-                                <tr className="border-b">
+                                <tr className="border-b border-gray-200">
                                     <td className="py-2 text-gray-600">
-                                        Annual Business Report (2024)
+                                        Annual Business Report
                                     </td>
-                                    <td className="py-2 text-right font-medium">$210.00</td>
+                                    <td className="py-2 text-right font-medium">
+                                        ${price.toFixed(2)}
+                                    </td>
                                 </tr>
-                                <tr className="border-b">
+
+                                <tr className="border-b border-gray-200">
                                     <td className="py-2 text-gray-600">Processing Fee</td>
                                     <td className="py-2 text-right">$0.00</td>
                                 </tr>
+
                                 <tr>
                                     <td className="py-3 font-semibold">Total Due</td>
                                     <td className="py-3 text-right text-lg font-semibold">
-                                        $210.00
+                                        ${total.toFixed(2)}
                                     </td>
                                 </tr>
                             </tbody>
@@ -92,8 +110,13 @@ export default function PaymentClient() {
                                 : "Processed securely via Authorize.Net"}
                         </p>
 
-                        {processor === "stripe" && <StripePayment formData={formData} />}
-                        {processor === "authorize" && <AuthorizePayment formData={formData} />}
+                        {processor === "stripe" && (
+                            <StripePayment formData={formData} amount={total} />
+                        )}
+
+                        {processor === "authorize" && (
+                            <AuthorizePayment formData={formData} amount={total} />
+                        )}
                     </div>
 
                     {/* Billing Info */}
@@ -110,7 +133,8 @@ export default function PaymentClient() {
                                 <span className="font-medium">Email:</span> {formData.email}
                             </p>
                             <p>
-                                <span className="font-medium">Address:</span> {formData.address}
+                                <span className="font-medium">Address:</span>{" "}
+                                {formData.address}
                             </p>
                         </div>
                     </div>

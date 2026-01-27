@@ -11,10 +11,15 @@ import {
     Calendar,
     Building2,
     Mail,
+    MapPin,
     FileSignature,
     Loader2,
-    ShieldCheck,
+    Filter,
+    Settings,
 } from "lucide-react";
+import AppSettingsModal from "@/components/admin/AppSettingsModal";
+import { useAppSettings } from "@/store/useAppSettings";
+import AdminHeader from "@/components/admin/AdminHeader";
 
 export default function AdminDashboard() {
     const [reports, setReports] = useState<AnnualReport[]>([]);
@@ -22,8 +27,14 @@ export default function AdminDashboard() {
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
     const [stats, setStats] = useState({ total: 0, today: 0, thisWeek: 0 });
-
     const router = useRouter();
+    const [openSettings, setOpenSettings] = useState(false);
+    const { settings } = useAppSettings();
+
+    const logout = async () => {
+        await supabase.auth.signOut();
+        router.push("/admin");
+    };
 
     useEffect(() => {
         checkAuth();
@@ -38,7 +49,9 @@ export default function AdminDashboard() {
         const {
             data: { session },
         } = await supabase.auth.getSession();
-        if (!session) router.push("/admin");
+        if (!session) {
+            router.push("/admin");
+        }
     };
 
     const fetchReports = async () => {
@@ -52,8 +65,8 @@ export default function AdminDashboard() {
 
             setReports(data || []);
             calculateStats(data || []);
-        } catch (err) {
-            console.error(err);
+        } catch (error) {
+            console.error("Error fetching reports:", error);
         } finally {
             setLoading(false);
         }
@@ -63,27 +76,37 @@ export default function AdminDashboard() {
         const now = new Date();
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const weekAgo = new Date(today);
-        weekAgo.setDate(today.getDate() - 7);
+        weekAgo.setDate(weekAgo.getDate() - 7);
+
+        const todayCount = data.filter(
+            (r) => new Date(r.created_at) >= today
+        ).length;
+        const weekCount = data.filter(
+            (r) => new Date(r.created_at) >= weekAgo
+        ).length;
 
         setStats({
             total: data.length,
-            today: data.filter(r => new Date(r.created_at) >= today).length,
-            thisWeek: data.filter(r => new Date(r.created_at) >= weekAgo).length,
+            today: todayCount,
+            thisWeek: weekCount,
         });
     };
 
     const filterReports = () => {
-        if (!searchQuery.trim()) return setFilteredReports(reports);
+        if (!searchQuery.trim()) {
+            setFilteredReports(reports);
+            return;
+        }
 
-        const q = searchQuery.toLowerCase();
-        setFilteredReports(
-            reports.filter(r =>
-                r.business_name.toLowerCase().includes(q) ||
-                r.email.toLowerCase().includes(q) ||
-                r.address.toLowerCase().includes(q) ||
-                r.signature.toLowerCase().includes(q)
-            )
+        const query = searchQuery.toLowerCase();
+        const filtered = reports.filter(
+            (report) =>
+                report.business_name.toLowerCase().includes(query) ||
+                report.email.toLowerCase().includes(query) ||
+                report.address.toLowerCase().includes(query) ||
+                report.signature.toLowerCase().includes(query)
         );
+        setFilteredReports(filtered);
     };
 
     const handleLogout = async () => {
@@ -92,219 +115,261 @@ export default function AdminDashboard() {
     };
 
     const exportToCSV = () => {
-        const headers = ["Date", "Business", "Email", "Address", "Signature"];
-        const rows = filteredReports.map(r => [
-            new Date(r.created_at).toLocaleString(),
-            r.business_name,
-            r.email,
-            r.address,
-            r.signature,
+        const headers = [
+            "Submission Date",
+            "Business Name",
+            "Address",
+            "Email",
+            "Signature",
+        ];
+        const csvData = filteredReports.map((report) => [
+            new Date(report.created_at).toLocaleString(),
+            report.business_name,
+            report.address,
+            report.email,
+            report.signature,
         ]);
 
         const csv = [
             headers.join(","),
-            ...rows.map(r => r.map(v => `"${v}"`).join(",")),
+            ...csvData.map((row) => row.map((cell) => `"${cell}"`).join(",")),
         ].join("\n");
 
         const blob = new Blob([csv], { type: "text/csv" });
+        const url = window.URL.createObjectURL(blob);
         const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
+        a.href = url;
         a.download = `annual-reports-${new Date().toISOString().split("T")[0]}.csv`;
         a.click();
     };
 
+    const formatDate = (dateString: string) => {
+        return new Date(dateString).toLocaleString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+        });
+    };
+
     if (loading) {
         return (
-            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-                <Loader2 className="w-8 h-8 animate-spin text-gray-900" />
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-slate-50">
+        <div className="min-h-screen bg-gray-50">
             {/* Header */}
-            <header className="bg-white border-b border-gray-200">
-                <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gray-900 text-white rounded-md flex items-center justify-center">
-                            <ShieldCheck className="w-5 h-5" />
-                        </div>
-                        <div>
-                            <h1 className="text-lg font-semibold text-gray-900">
-                                Admin Dashboard
-                            </h1>
-                            <p className="text-xs text-gray-500">
-                                Annual Report Submissions
-                            </p>
-                        </div>
-                    </div>
-
-                    <button
-                        onClick={handleLogout}
-                        className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-800 transition"
-                    >
-                        <LogOut className="w-4 h-4" />
-                        Logout
-                    </button>
-                </div>
-            </header>
+            <AdminHeader
+                onOpenSettings={() => setOpenSettings(true)}
+                onLogout={logout}
+            />
 
             <main className="max-w-7xl mx-auto px-6 py-8">
-                {/* Stats */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <Stat label="Total Submissions" value={stats.total} />
-                    <Stat label="Today" value={stats.today} />
-                    <Stat label="Last 7 Days" value={stats.thisWeek} />
-                </div>
+                <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
+                    {/* Stats Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm text-gray-600 mb-1">
+                                        Total Submissions
+                                    </p>
+                                    <p className="text-3xl font-bold text-gray-900">
+                                        {stats.total}
+                                    </p>
+                                </div>
+                                <div className="p-3 bg-blue-100 rounded-lg">
+                                    <FileText className="w-6 h-6 text-blue-600" />
+                                </div>
+                            </div>
+                        </div>
 
-                {/* Controls */}
-                <div className="bg-white border border-gray-200 rounded-md p-4 mb-6 flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
-                    <div className="relative w-full max-w-sm">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <input
-                            value={searchQuery}
-                            onChange={e => setSearchQuery(e.target.value)}
-                            placeholder="Search submissions..."
-                            className="input pl-9 pr-3 py-2"
+                        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm text-gray-600 mb-1">Today</p>
+                                    <p className="text-3xl font-bold text-gray-900">
+                                        {stats.today}
+                                    </p>
+                                </div>
+                                <div className="p-3 bg-green-100 rounded-lg">
+                                    <Calendar className="w-6 h-6 text-green-600" />
+                                </div>
+                            </div>
+                        </div>
 
-                        />
+                        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm text-gray-600 mb-1">This Week</p>
+                                    <p className="text-3xl font-bold text-gray-900">
+                                        {stats.thisWeek}
+                                    </p>
+                                </div>
+                                <div className="p-3 bg-purple-100 rounded-lg">
+                                    <Filter className="w-6 h-6 text-purple-600" />
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
-                    <button
-                        onClick={exportToCSV}
-                        className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 transition"
-                    >
-                        <Download className="w-4 h-4" />
-                        Export CSV
-                    </button>
-                </div>
+                    {/* Search and Export */}
+                    <div className="bg-white rounded-xl shadow-sm p-6 mb-6 border border-gray-200">
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
+                            <div className="relative flex-1 max-w-md">
+                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                                <input
+                                    type="text"
+                                    placeholder="Search by business name, email, or address..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                                />
+                            </div>
+                            <button
+                                onClick={exportToCSV}
+                                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                            >
+                                <Download className="w-4 h-4" />
+                                <span>Export to CSV</span>
+                            </button>
+                        </div>
+                    </div>
 
-                {/* Table */}
-                <div className="bg-white border border-gray-200 rounded-md overflow-x-auto">
-                    <table className="w-full text-sm">
-                        <thead className="bg-gray-50 border-b border-gray-200">
-                            <tr>
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">
-                                    Date
-                                </th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">
-                                    Business
-                                </th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">
-                                    Email
-                                </th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">
-                                    Payment
-                                </th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">
-                                    Status
-                                </th>
-                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">
-                                    Signature
-                                </th>
-                            </tr>
-                        </thead>
-
-
-                        <tbody className="divide-y divide-gray-200">
-                            {filteredReports.length === 0 ? (
-                                <tr>
-                                    <td colSpan={6} className="text-center py-10 text-gray-500">
-                                        No submissions found
-                                    </td>
-                                </tr>
-                            ) : (
-                                filteredReports.map(r => (
-                                    <tr key={r.id} className="hover:bg-gray-50 transition">
-                                        {/* Date */}
-                                        <td className="px-4 py-3 whitespace-nowrap">
-                                            <div className="flex items-center gap-2 text-sm text-gray-900">
-                                                <Calendar className="w-4 h-4 text-gray-400" />
-                                                {new Date(r.created_at).toLocaleString()}
-                                            </div>
-                                        </td>
-
-                                        {/* Business */}
-                                        <td className="px-4 py-3">
-                                            <div className="flex items-center gap-2 text-sm">
-                                                <Building2 className="w-4 h-4 text-gray-400 shrink-0" />
-                                                <span className="font-medium text-gray-900">
-                                                    {r.business_name}
-                                                </span>
-                                            </div>
-                                        </td>
-
-                                        {/* Email */}
-                                        <td className="px-4 py-3">
-                                            <div className="flex items-center gap-2 text-sm text-gray-600">
-                                                <Mail className="w-4 h-4 text-gray-400 shrink-0" />
-                                                <span className="truncate max-w-[220px]">{r.email}</span>
-                                            </div>
-                                        </td>
-
-                                        {/* Payment */}
-                                        <td className="px-4 py-3">
-                                            <div className="text-sm text-gray-900 font-medium">
-                                                ${r.amount || "210.00"}
-                                            </div>
-                                            <div className="text-xs text-gray-500 capitalize">
-                                                {r.payment_processor}
-                                            </div>
-                                        </td>
-
-                                        {/* Status */}
-                                        <td className="px-4 py-3">
-                                            <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                                                {r.payment_status || "completed"}
-                                            </span>
-                                        </td>
-
-                                        {/* Signature */}
-                                        <td className="px-4 py-3">
-                                            <div className="flex items-center gap-2 text-sm font-serif italic text-gray-900">
-                                                <FileSignature className="w-4 h-4 text-gray-400 shrink-0" />
-                                                <span className="truncate max-w-[200px]">
-                                                    {r.signature}
-                                                </span>
-                                            </div>
-                                        </td>
+                    {/* Reports Table */}
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead className="bg-gray-50 border-b border-gray-200">
+                                    <tr>
+                                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                            Date
+                                        </th>
+                                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                            Business Name
+                                        </th>
+                                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                            Email
+                                        </th>
+                                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                            Payment
+                                        </th>
+                                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                            Status
+                                        </th>
+                                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                            Signature
+                                        </th>
                                     </tr>
-                                ))
-                            )}
-                        </tbody>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                    {filteredReports.length === 0 ? (
+                                        <tr>
+                                            <td
+                                                colSpan={6}
+                                                className="px-6 py-12 text-center text-gray-500"
+                                            >
+                                                {searchQuery
+                                                    ? "No reports found matching your search."
+                                                    : "No submissions yet."}
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        filteredReports.map((report) => (
+                                            <tr
+                                                key={report.id}
+                                                className="hover:bg-gray-50 transition-colors"
+                                            >
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="flex items-center text-sm text-gray-900">
+                                                        <Calendar className="w-4 h-4 text-gray-400 mr-2" />
+                                                        {formatDate(report.created_at)}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center text-sm">
+                                                        <Building2 className="w-4 h-4 text-gray-400 mr-2 flex-shrink-0" />
+                                                        <span className="font-medium text-gray-900">
+                                                            {report.business_name}
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center text-sm text-gray-600">
+                                                        <Mail className="w-4 h-4 text-gray-400 mr-2 flex-shrink-0" />
+                                                        {report.email}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="text-sm">
+                                                        <div className="flex items-center space-x-2 mb-1">
+                                                            <span
+                                                                className={`px-2 py-1 rounded text-xs font-medium ${report.payment_processor === "stripe"
+                                                                    ? "bg-indigo-100 text-indigo-700"
+                                                                    : "bg-green-100 text-green-700"
+                                                                    }`}
+                                                            >
+                                                                {report.payment_processor === "stripe"
+                                                                    ? "Stripe"
+                                                                    : "Authorize.Net"}
+                                                            </span>
+                                                            <span className="text-gray-900 font-semibold">
+                                                                ${report.amount || "210.00"}
+                                                            </span>
+                                                        </div>
+                                                        {report.transaction_id && (
+                                                            <p
+                                                                className="text-xs text-gray-500 font-mono truncate max-w-[150px]"
+                                                                title={report.transaction_id}
+                                                            >
+                                                                {report.transaction_id}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <span
+                                                        className={`px-3 py-1 rounded-full text-xs font-medium ${report.payment_status === "completed"
+                                                            ? "bg-green-100 text-green-700"
+                                                            : report.payment_status === "pending"
+                                                                ? "bg-yellow-100 text-yellow-700"
+                                                                : "bg-red-100 text-red-700"
+                                                            }`}
+                                                    >
+                                                        {report.payment_status || "completed"}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center text-sm text-gray-900">
+                                                        <FileSignature className="w-4 h-4 text-gray-400 mr-2 flex-shrink-0" />
+                                                        <span className="font-serif italic">
+                                                            {report.signature}
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
 
-                    </table>
+                    {/* Footer Info */}
+                    <div className="mt-6 text-center text-sm text-gray-500">
+                        Showing {filteredReports.length} of {reports.length} submissions
+                    </div>
                 </div>
-
-                <p className="mt-4 text-xs text-gray-500 text-center">
-                    Showing {filteredReports.length} of {reports.length} submissions
-                </p>
             </main>
-
-            {/* Shared input styles */}
-            <style jsx>{`
-  .input {
-    width: 100%;
-    border: 1px solid #d1d5db;
-    border-radius: 0.375rem;
-    outline: none;
-  }
-  .input:focus {
-    border-color: #111827;
-    box-shadow: 0 0 0 1px #111827;
-  }
-`}</style>
-
-        </div>
-    );
-}
-
-function Stat({ label, value }: { label: string; value: number }) {
-    return (
-        <div className="bg-white border border-gray-200 rounded-md p-4">
-            <p className="text-xs text-gray-500">{label}</p>
-            <p className="text-2xl font-semibold text-gray-900">{value}</p>
+            <AppSettingsModal
+                open={openSettings}
+                onClose={() => setOpenSettings(false)}
+            />
         </div>
     );
 }
