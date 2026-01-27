@@ -340,7 +340,7 @@ export default function AnnualReportForm() {
                         )}
 
                         {/* Payment Method (Read-only) - if only one method active */}
-                        {!shouldShowPaymentSelection && (
+                        {/* {!shouldShowPaymentSelection && (
                             <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
                                 <div className="flex items-center gap-3">
                                     <CreditCard className="w-5 h-5 text-gray-600" />
@@ -355,7 +355,7 @@ export default function AnnualReportForm() {
                                     </div>
                                 </div>
                             </div>
-                        )}
+                        )} */}
 
                         {/* Signature */}
                         <div>
